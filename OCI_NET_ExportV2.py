@@ -67,7 +67,7 @@ def get_ip_info(ip_address):
 
 # Initialize OCI configuration
 # This will use the default config file at ~/.oci/config
-config = oci.config.from_file("~/.oci/config", "cloudsh")
+config = oci.config.from_file()
 
 # Initialize OCI clients
 virtual_network_client = oci.core.VirtualNetworkClient(config)
@@ -277,11 +277,16 @@ def format_oic_network_access_rules(oic_instance):
     formatted_rules = []
     
     try:
-        # Get network endpoint details
-        if hasattr(oic_instance, 'network_endpoint_details') and oic_instance.network_endpoint_details:
-            network_details = oic_instance.network_endpoint_details
+        # Get the full instance details to access network endpoint configuration
+        instance_details = integration_client.get_integration_instance(
+            integration_instance_id=oic_instance.id
+        ).data
+        
+        # Check network endpoint details
+        if hasattr(instance_details, 'network_endpoint_details') and instance_details.network_endpoint_details:
+            network_details = instance_details.network_endpoint_details
             
-            # Check if there are allowlisted IPs or VCNs
+            # Check for allowlisted HTTP IPs
             if hasattr(network_details, 'allowlisted_http_ips') and network_details.allowlisted_http_ips:
                 for ip in network_details.allowlisted_http_ips:
                     rule_dict = {
@@ -297,13 +302,14 @@ def format_oic_network_access_rules(oic_instance):
                     }
                     formatted_rules.append(rule_dict)
             
+            # Check for allowlisted HTTP VCNs
             if hasattr(network_details, 'allowlisted_http_vcns') and network_details.allowlisted_http_vcns:
-                for vcn_access in network_details.allowlisted_http_vcns:
-                    vcn_id = vcn_access.id if hasattr(vcn_access, 'id') else 'Unknown'
-                    allowlisted_ips = vcn_access.allowlisted_ips if hasattr(vcn_access, 'allowlisted_ips') else []
+                for vcn_allowlist in network_details.allowlisted_http_vcns:
+                    vcn_id = vcn_allowlist.id if hasattr(vcn_allowlist, 'id') else 'Unknown'
                     
-                    if allowlisted_ips:
-                        for ip in allowlisted_ips:
+                    # Check if specific IPs are allowlisted within the VCN
+                    if hasattr(vcn_allowlist, 'allowlisted_ips') and vcn_allowlist.allowlisted_ips:
+                        for ip in vcn_allowlist.allowlisted_ips:
                             rule_dict = {
                                 'OIC Instance': oic_instance.display_name,
                                 'Type': 'Ingress',
@@ -317,6 +323,7 @@ def format_oic_network_access_rules(oic_instance):
                             }
                             formatted_rules.append(rule_dict)
                     else:
+                        # Entire VCN is allowlisted
                         rule_dict = {
                             'OIC Instance': oic_instance.display_name,
                             'Type': 'Ingress',
@@ -330,39 +337,46 @@ def format_oic_network_access_rules(oic_instance):
                         }
                         formatted_rules.append(rule_dict)
             
-            # If no specific rules and it's public
-            if not formatted_rules and hasattr(network_details, 'network_endpoint_type'):
-                if network_details.network_endpoint_type == 'PUBLIC':
-                    rule_dict = {
-                        'OIC Instance': oic_instance.display_name,
-                        'Type': 'Ingress',
-                        'IP': '0.0.0.0/0',
-                        'Info IP': get_ip_info('0.0.0.0/0'),
-                        'Protocol': 'HTTPS',
-                        'Source Port': 'All',
-                        'Destination Port Range': '443',
-                        'Description': 'Public endpoint - No IP restrictions',
-                        'Comments': ''
-                    }
-                    formatted_rules.append(rule_dict)
+            # Check if it's a public endpoint with no restrictions
+            if not formatted_rules:
+                if hasattr(network_details, 'network_endpoint_type'):
+                    endpoint_type = network_details.network_endpoint_type
+                    if endpoint_type == 'PUBLIC':
+                        rule_dict = {
+                            'OIC Instance': oic_instance.display_name,
+                            'Type': 'Ingress',
+                            'IP': '0.0.0.0/0',
+                            'Info IP': get_ip_info('0.0.0.0/0'),
+                            'Protocol': 'HTTPS',
+                            'Source Port': 'All',
+                            'Destination Port Range': '443',
+                            'Description': 'Public endpoint - No IP restrictions',
+                            'Comments': ''
+                        }
+                        formatted_rules.append(rule_dict)
         
-        # If still no rules found, add a default entry
+        # If still no rules found, add informational entry
         if not formatted_rules:
+            endpoint_type = 'Unknown'
+            if hasattr(instance_details, 'network_endpoint_details') and instance_details.network_endpoint_details:
+                if hasattr(instance_details.network_endpoint_details, 'network_endpoint_type'):
+                    endpoint_type = instance_details.network_endpoint_details.network_endpoint_type
+            
             rule_dict = {
                 'OIC Instance': oic_instance.display_name,
-                'Type': 'N/A',
+                'Type': 'Info',
                 'IP': 'N/A',
-                'Info IP': '',
-                'Protocol': 'N/A',
+                'Info IP': f'Endpoint Type: {endpoint_type}',
+                'Protocol': 'HTTPS',
                 'Source Port': 'N/A',
-                'Destination Port Range': 'N/A',
-                'Description': 'No network access rules configured',
+                'Destination Port Range': '443',
+                'Description': 'No specific network access restrictions configured',
                 'Comments': ''
             }
             formatted_rules.append(rule_dict)
             
     except Exception as e:
-        print(f"    Warning: Error processing network access rules: {e}")
+        print(f"    Warning: Error processing network access rules for {oic_instance.display_name}: {e}")
         rule_dict = {
             'OIC Instance': oic_instance.display_name,
             'Type': 'Error',
@@ -599,7 +613,7 @@ def style_worksheet(worksheet, title):
 
 def export_vcn_security_to_excel(tenancy_id, vcn_names, output_file):
     """
-    Export Security Lists and NSGs for specified VCNs to Excel
+    Export Security Lists, NSGs, and OIC Network Access rules for specified VCNs to Excel
     (Searches across all compartments in the tenancy)
     
     Args:
@@ -609,6 +623,40 @@ def export_vcn_security_to_excel(tenancy_id, vcn_names, output_file):
     """
     # Create Excel writer
     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+        
+        # Export OIC instances first (one sheet for all OIC instances)
+        print("\n" + "="*70)
+        print("Processing OIC Instances Network Access Rules")
+        print("="*70)
+        
+        oic_instances = get_all_oic_instances(tenancy_id)
+        if oic_instances:
+            print(f"Found {len(oic_instances)} OIC instance(s)")
+            all_oic_data = []
+            
+            for oic_instance, compartment_id in oic_instances:
+                print(f"  Processing OIC: {oic_instance.display_name}")
+                oic_rules = format_oic_network_access_rules(oic_instance)
+                all_oic_data.extend(oic_rules)
+            
+            if all_oic_data:
+                df_oic = pd.DataFrame(all_oic_data)
+                column_order = ['OIC Instance', 'Type', 'IP', 'Info IP', 'Protocol', 'Source Port', 'Destination Port Range', 'Description', 'Comments']
+                df_oic = df_oic[column_order]
+                sheet_name = "OIC_Network_Access"
+                df_oic.to_excel(writer, sheet_name=sheet_name, index=False)
+                
+                # Style the worksheet
+                worksheet = writer.sheets[sheet_name]
+                style_worksheet(worksheet, "OIC Network Access Rules")
+                print(f"  Exported {len(all_oic_data)} OIC network access rules")
+        else:
+            print("No OIC instances found in the tenancy")
+        
+        # Process VCNs
+        print("\n" + "="*70)
+        print("Processing VCNs")
+        print("="*70)
         
         for vcn_name in vcn_names:
             print(f"\nProcessing VCN: {vcn_name}")
