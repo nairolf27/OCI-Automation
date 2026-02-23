@@ -1,0 +1,23 @@
+{
+    "domains":{
+        "Default":{
+            "domain_name": "Default",
+            "domain_url":"https://idcs-de05aab1bfd64bc7a631d140351318b6.identity.oraclecloud.com:443",
+            "profiles": {
+                "Admin": {
+                  "groups": ["Administrators"]
+                },
+                "Developer": {
+                  "groups": ["Dev", "GitUsers"]
+                },
+                "ReadOnly": {
+                  "groups": ["Readers"]
+                }
+              },        
+            "users":[
+                {"username":"nairolf.noel@gmail.com","state":"present","groups":["Administrators"],"first_name":"Florian","last_name":"NOEL","email":"nairolf.noel@gmail.com"},
+                {"username":"michel","state":"present","profile":"","groups":["Network_Admin"],"first_name":"Florian","last_name":"NOEL","email":"nairolf.noel@gmail.com"}
+            ]         
+        }
+    }
+}
