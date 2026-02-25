@@ -13,6 +13,7 @@ load_dotenv()
 # Environment variables
 DOMAINS = os.getenv("DOMAINS", "")
 THRESHOLD_DAYS = int(os.getenv("THRESHOLD_DAYS", 30))
+SSL_VERIFY = os.getenv("SSL_VERIFY", "true").lower() == "true"
 
 SMTP_SERVER = os.getenv("SMTP_SERVER")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
@@ -21,11 +22,15 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 EMAIL_FROM = os.getenv("EMAIL_FROM")
 EMAIL_TO = os.getenv("EMAIL_TO")
 
+
 domains_list = [d.strip() for d in DOMAINS.split(",") if d.strip()]
 
 
 def get_ssl_expiry(domain):
-    context = ssl.create_default_context()
+    if SSL_VERIFY:
+        context = ssl.create_default_context()
+    else:
+        context = ssl._create_unverified_context()
     with socket.create_connection((domain, 443), timeout=10) as sock:
         with context.wrap_socket(sock, server_hostname=domain) as secure_sock:
             certificate = secure_sock.getpeercert()
