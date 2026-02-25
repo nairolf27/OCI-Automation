@@ -1,168 +1,85 @@
-import os
-import ssl
-import socket
-import smtplib
-from datetime import datetime
-from dotenv import load_dotenv
+import os, smtplib
+from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from dotenv import load_dotenv
+from sslyze import Scanner, ServerScanRequest, ScanCommand, ServerNetworkLocation
 
-# Load .env file if present
 load_dotenv()
 
-# Environment variables
-DOMAINS = os.getenv("DOMAINS", "")
-THRESHOLD_DAYS = int(os.getenv("THRESHOLD_DAYS", 30))
-SSL_VERIFY = os.getenv("SSL_VERIFY", "true").lower() == "true"
-
-SMTP_SERVER = os.getenv("SMTP_SERVER")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-SMTP_USERNAME = os.getenv("SMTP_USERNAME")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-EMAIL_FROM = os.getenv("EMAIL_FROM")
-EMAIL_TO = os.getenv("EMAIL_TO")
+DOMAINS      = [d.strip() for d in os.getenv("DOMAINS", "").split(",") if d.strip()]
+THRESHOLD    = int(os.getenv("THRESHOLD_DAYS", 30))
+SMTP_SERVER  = os.getenv("SMTP_SERVER")
+SMTP_PORT    = int(os.getenv("SMTP_PORT", 587))
+SMTP_USER    = os.getenv("SMTP_USERNAME")
+SMTP_PASS    = os.getenv("SMTP_PASSWORD")
+EMAIL_FROM   = os.getenv("EMAIL_FROM")
+EMAIL_TO     = os.getenv("EMAIL_TO")
 
 
-domains_list = [d.strip() for d in DOMAINS.split(",") if d.strip()]
+def scan_domains(domains):
+    requests = [
+        ServerScanRequest(
+            server_location=ServerNetworkLocation(d, 443),
+            scan_commands={ScanCommand.CERTIFICATE_INFO}
+        )
+        for d in domains
+    ]    
+    scanner = Scanner()
+    scanner.queue_scans(requests)
 
-
-def get_ssl_expiry(domain):
-    if SSL_VERIFY:
-        context = ssl.create_default_context()
-    else:
-        context = ssl._create_unverified_context()
-    with socket.create_connection((domain, 443), timeout=10) as sock:
-        with context.wrap_socket(sock, server_hostname=domain) as secure_sock:
-            certificate = secure_sock.getpeercert()
-            expiry_date = datetime.strptime(
-                certificate["notAfter"], "%b %d %H:%M:%S %Y %Z"
-            )
-            return expiry_date
-
-
-def build_html_email(results, warning_count, expired_count):
-    current_date = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
-
-    rows = ""
-    for r in results:
-        color = "#28a745"  # green
-        if r["status"] == "EXPIRING SOON":
-            color = "#ffc107"  # orange
-        elif r["status"] == "EXPIRED":
-            color = "#dc3545"  # red
-
-        rows += f"""
-        <tr>
-            <td>{r['domain']}</td>
-            <td>{r['expiry']}</td>
-            <td style="text-align:center;">{r['days']} days</td>
-            <td style="color:{color}; font-weight:bold;">{r['status']}</td>
-        </tr>
-        """
-
-    html = f"""
-    <html>
-    <body style="font-family: Arial, sans-serif; font-size: 14px;">
-        <h2>SSL Certificate Monitoring Report</h2>
-        <p><strong>Generated on:</strong> {current_date}</p>
-
-        <h3>Summary</h3>
-        <ul>
-            <li>Total domains checked: {len(results)}</li>
-            <li>Expiring soon: {warning_count}</li>
-            <li>Expired: {expired_count}</li>
-        </ul>
-
-        <h3>Details</h3>
-        <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse;">
-            <thead style="background-color: #f2f2f2;">
-                <tr>
-                    <th>Domain</th>
-                    <th>Expiration Date</th>
-                    <th>Days Remaining</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                {rows}
-            </tbody>
-        </table>
-
-        <p style="margin-top:20px; font-size:12px; color:gray;">
-            Alert threshold configured: {THRESHOLD_DAYS} days<br>
-        </p>
-    </body>
-    </html>
-    """
-
-    return html
-
-
-def send_email(subject, html_body):
-    message = MIMEMultipart("alternative")
-    message["Subject"] = subject
-    message["From"] = EMAIL_FROM
-    message["To"] = EMAIL_TO
-
-    part = MIMEText(html_body, "html")
-    message.attach(part)
-
-    try:
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(SMTP_USERNAME, SMTP_PASSWORD)
-            server.sendmail(EMAIL_FROM, EMAIL_TO, message.as_string())
-        print("Email sent successfully")
-    except Exception as e:
-        print(f"Failed to send email: {e}")
-
-
-def main():
     results = []
-    warning_count = 0
-    expired_count = 0
-
-    for domain in domains_list:
+    for r in scanner.get_results():
+        domain = r.server_location.hostname
         try:
-            expiry_date = get_ssl_expiry(domain)
-            days_left = (expiry_date - datetime.utcnow()).days
-            expiry_str = expiry_date.strftime("%Y-%m-%d")
+            cert = r.scan_result.certificate_info.result.certificate_deployments[0].received_certificate_chain[0]
+            days = (cert.not_valid_after_utc - datetime.now(timezone.utc)).days
+            status = "EXPIRED" if days < 0 else "EXPIRING SOON" if days <= THRESHOLD else "VALID"
+            print(f"{domain}: {days}d — {status}")
+            results.append({"domain": domain, "expiry": cert.not_valid_after_utc.strftime("%Y-%m-%d"), "days": days, "status": status})
+        except Exception as e:
+            print(f"{domain}: ERROR — {e}")
+    return results
 
-            if days_left < 0:
-                status = "EXPIRED"
-                expired_count += 1
-            elif days_left <= THRESHOLD_DAYS:
-                status = "EXPIRING SOON"
-                warning_count += 1
-            else:
-                status = "VALID"
 
-            print(f"{domain}: {days_left} days remaining - {status}")
+def send_email(results):
+    colors = {"VALID": "#28a745", "EXPIRING SOON": "#ffc107", "EXPIRED": "#dc3545"}
+    rows = "".join(
+        f"<tr><td>{r['domain']}</td><td>{r['expiry']}</td><td>{r['days']}d</td>"
+        f"<td style='color:{colors[r['status']]}'><b>{r['status']}</b></td></tr>"
+        for r in results
+    )
+    expired = sum(1 for r in results if r["status"] == "EXPIRED")
+    warning = sum(1 for r in results if r["status"] == "EXPIRING SOON")
 
-            results.append({
-                "domain": domain,
-                "expiry": expiry_str,
-                "days": days_left,
-                "status": status
-            })
+    subject = ("[CRITICAL] SSL Certificate Expired" if expired else
+               "[WARNING] SSL Certificate Expiring Soon" if warning else
+               "SSL Certificate Monitoring Report")
 
-        except Exception as error:
-            print(f"{domain}: ERROR - {error}")
+    html = f"""<html><body style="font-family:Arial;font-size:14px">
+        <h2>SSL Certificate Report — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}</h2>
+        <p>Checked: {len(results)} | Expiring soon: {warning} | Expired: {expired} | Threshold: {THRESHOLD}d</p>
+        <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse">
+            <tr style="background:#f2f2f2"><th>Domain</th><th>Expiry</th><th>Days Left</th><th>Status</th></tr>
+            {rows}
+        </table>
+    </body></html>"""
 
-    if results:
-        html_body = build_html_email(results, warning_count, expired_count)
+    msg = MIMEMultipart("alternative")
+    msg["Subject"], msg["From"], msg["To"] = subject, EMAIL_FROM, EMAIL_TO
+    msg.attach(MIMEText(html, "html"))
 
-        # Optional: dynamic subject if critical
-        subject = "SSL Certificate Monitoring Report"
-        if expired_count > 0:
-            subject = "[CRITICAL] SSL Certificate Expired"
-        elif warning_count > 0:
-            subject = "[WARNING] SSL Certificate Expiring Soon"
-
-        send_email(subject, html_body)
+    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as s:
+        s.starttls()
+        s.login(SMTP_USER, SMTP_PASS)
+        s.sendmail(EMAIL_FROM, EMAIL_TO, msg.as_string())
+    print("Email sent.")
 
 
 if __name__ == "__main__":
-    main()
+    if not DOMAINS:
+        print("No domains set. Configure DOMAINS env var.")
+    else:
+        results = scan_domains(DOMAINS)
+        if results:
+            send_email(results)
