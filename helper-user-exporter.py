@@ -21,7 +21,11 @@ def get_domain_users(domain_url, config):
     
     while True:
         try:
-            response = identity_domains_client.list_users(start_index=start_index, count=count)
+            response = identity_domains_client.list_users(
+                start_index=start_index,
+                count=count,
+                attributes="userName,name,emails,active,groups"
+            )
             resources = response.data.resources or []
             users.extend(resources)
             
@@ -57,12 +61,16 @@ def format_user(raw_user):
     
     active = raw_user.active if raw_user.active is not None else True
     state = "present" if active else "absent"
+
+    groups = []
+    if raw_user.groups:
+        groups = [g.display for g in raw_user.groups if g.display]
     
     return {
         "username": username,
         "state": state,
         "profile": "",
-        "groups": [],
+        "groups": groups,
         "first_name": first_name,
         "last_name": last_name,
         "email": email
@@ -81,11 +89,7 @@ def write_json(result, output_file):
             users = d_val["users"]
             for u_idx, user in enumerate(users):
                 u_comma = "," if u_idx < len(users) - 1 else ""
-                # Serialize user as a compact single line
-                user_line = json.dumps(user, ensure_ascii=False, separators=(", ", ": "))
-                # Fix separators to have space after colon but not comma
                 user_line = json.dumps(user, ensure_ascii=False)
-                # Force compact (no newlines) by using default json.dumps without indent
                 f.write(f'                {user_line}{u_comma}\n')
             f.write('            ]\n')
             f.write(f'        }}{d_comma}\n')
