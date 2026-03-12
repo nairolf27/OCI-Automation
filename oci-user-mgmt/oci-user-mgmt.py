@@ -5,7 +5,7 @@ import sys
 from datetime import datetime
 from typing import Dict, List, Optional, Set
 import os as _os
-
+import time
 
 
 
@@ -328,6 +328,7 @@ def add_user_to_group(client: oci.identity_domains.IdentityDomainsClient,
         )
         client.patch_group(group_id=group_id, patch_op=patch_op)
         log.info(f"  [OK]  [{domain_name}] User '{username}' added to group '{group_name}'")
+        time.wait(0.2)
         return True
     except Exception as e:
         log.error(f"  [ERROR] [{domain_name}] Failed to add '{username}' to group '{group_name}': {e}")
@@ -353,6 +354,7 @@ def remove_user_from_group(client: oci.identity_domains.IdentityDomainsClient,
         )
         client.patch_group(group_id=group_id, patch_op=patch_op)
         log.info(f"  [OK]  [{domain_name}] User '{username}' removed from group '{group_name}'")
+        time.wait(0.2)
         return True
     except Exception as e:
         log.error(f"  [ERROR] [{domain_name}] Failed to remove '{username}' from group '{group_name}': {e}")
