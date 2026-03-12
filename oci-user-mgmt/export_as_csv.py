@@ -82,20 +82,26 @@ def export_domain_to_csv(
     """
     Write all users of a single domain to a CSV file.
 
-    Each row contains first_name, last_name, profile (raw, may be empty),
-    and groups (semicolon-separated). The output file is named after the domain.
+    Only users with state="present" are written. Each row contains first_name,
+    last_name, profile (raw, may be empty), and groups (semicolon-separated).
+    The output file is named after the domain.
 
     :param domain_name: Name of the domain, used as the output filename stem.
     :param users: List of user dictionaries for this domain.
     :param output_dir: Directory where the CSV file will be written.
     """
     output_path = output_dir / f"{domain_name}.csv"
+    present_users = [u for u in users if u.get("state") == "present"]
+    skipped = len(users) - len(present_users)
+
+    if skipped:
+        logger.info("Domain '%s': %d user(s) skipped (state != present)", domain_name, skipped)
 
     with output_path.open(mode="w", newline="", encoding="utf-8") as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=CSV_FIELDNAMES, delimiter=CSV_DELIMITER)
         writer.writeheader()
 
-        for user in users:
+        for user in present_users:
             groups = user.get("groups", [])
             writer.writerow({
                 "first_name": user.get("first_name", ""),
@@ -104,7 +110,9 @@ def export_domain_to_csv(
                 "groups": ";".join(groups),
             })
 
-    logger.info("Exported domain '%s' → %s (%d users)", domain_name, output_path, len(users))
+    logger.info(
+        "Exported domain '%s' → %s (%d users)", domain_name, output_path, len(present_users)
+    )
 
 
 def export_all_domains(data: dict, output_dir: Path) -> None:
