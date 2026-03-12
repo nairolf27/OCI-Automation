@@ -43,7 +43,7 @@ OUTPUT_DIR = os.getenv("OUTPUT_DIR", "exports")
 # ---------------------------------------------------------------------------
 
 CSV_FIELDNAMES = ["first_name", "last_name", "profile", "groups"]
-CSV_DELIMITER = ","
+CSV_DELIMITER = ";"
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +107,7 @@ def export_domain_to_csv(
                 "first_name": user.get("first_name", ""),
                 "last_name": user.get("last_name", ""),
                 "profile": user.get("profile", ""),
-                "groups": ";".join(groups),
+                "groups": ", ".join(groups),
             })
 
     logger.info(
