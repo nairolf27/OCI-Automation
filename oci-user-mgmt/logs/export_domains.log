@@ -1,0 +1,7 @@
+2026-03-13 10:57:35,870 [INFO] Starting domain export — input: ../oci_identity_users.json, output: exports/domains_export.xlsx
+2026-03-13 10:57:35,870 [ERROR] Input file not found: ../oci_identity_users.json
+2026-03-13 10:57:43,610 [INFO] Starting domain export — input: oci_identity_users.json, output: exports/domains_export.xlsx
+2026-03-13 10:57:43,615 [INFO] Loaded JSON file: oci_identity_users.json
+2026-03-13 10:57:43,618 [INFO] Sheet created for domain 'Default' with 2 user(s)
+2026-03-13 10:57:43,629 [INFO] Workbook saved → exports/domains_export.xlsx (1 sheet(s))
+2026-03-13 10:57:43,629 [INFO] Export complete.

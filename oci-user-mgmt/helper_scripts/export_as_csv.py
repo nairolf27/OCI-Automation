@@ -36,8 +36,8 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-INPUT_FILE = os.getenv("INPUT_FILE", "domains.json")
-OUTPUT_FILE = os.getenv("OUTPUT_FILE", "exports/domains_export.xlsx")
+INPUT_FILE = os.getenv("INPUT_FILE", "oci_identity_users.json")
+EXCEL_OUTPUT_FILE = os.getenv("EXCEL_OUTPUT_FILE", "exports/domains_export.xlsx")
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -178,11 +178,11 @@ def main() -> None:
     """
     Path("logs").mkdir(exist_ok=True)
     logger.info(
-        "Starting domain export — input: %s, output: %s", INPUT_FILE, OUTPUT_FILE
+        "Starting domain export — input: %s, output: %s", INPUT_FILE, EXCEL_OUTPUT_FILE
     )
 
     data = load_json(INPUT_FILE)
-    export_all_domains(data, Path(OUTPUT_FILE))
+    export_all_domains(data, Path(EXCEL_OUTPUT_FILE))
 
     logger.info("Export complete.")
 
