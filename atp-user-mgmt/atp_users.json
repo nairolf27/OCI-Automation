@@ -1,0 +1,56 @@
+{
+  "databases": {
+    "PROD": {
+      "ords_base_url": "https://prod-instance.adb.eu-frankfurt-1.oraclecloudapps.com/ords",
+      "ords_admin_user": "ADMIN",
+      "profiles": {
+        "developer": {
+          "roles": ["CONNECT", "RESOURCE"]
+        },
+        "readonly": {
+          "roles": ["CONNECT"]
+        },
+        "dba": {
+          "roles": ["CONNECT", "RESOURCE", "DBA"]
+        }
+      },
+      "users": [
+        {
+          "username": "APP_USER_1",
+          "state": "present",
+          "profile": "developer",
+          "password": "SecurePassword1!",
+          "roles": []
+        },
+        {
+          "username": "APP_USER_2",
+          "state": "present",
+          "password": "SecurePassword2!",
+          "roles": ["CONNECT", "RESOURCE"]
+        },
+        {
+          "username": "OLD_USER",
+          "state": "absent"
+        }
+      ]
+    },
+    "DEV": {
+      "ords_base_url": "https://dev-instance.adb.eu-frankfurt-1.oraclecloudapps.com/ords",
+      "ords_admin_user": "ADMIN",
+      "profiles": {
+        "developer": {
+          "roles": ["CONNECT", "RESOURCE"]
+        }
+      },
+      "users": [
+        {
+          "username": "DEV_USER_1",
+          "state": "present",
+          "profile": "developer",
+          "password": "DevPassword1!",
+          "roles": []
+        }
+      ]
+    }
+  }
+}
