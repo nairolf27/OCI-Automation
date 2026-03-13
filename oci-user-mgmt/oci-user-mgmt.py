@@ -430,8 +430,16 @@ def main() -> None:
     print("║     OCI Identity Reconciler          ║")
     print("╚══════════════════════════════════════╝\n")
     log.info(f"Log file: {LOG_FILE}\n")
-
-    oci_config = oci.config.from_file()
+    if not ENV_OCI_CONFIG:
+        oci_config = oci.config.from_file()
+    else:
+        oci_config = {
+            "user": OCI_USER_OCID,
+            "key_content": OCI_PRIVATE_KEY,
+            "fingerprint": OCI_FINGERPRINT,
+            "tenancy": OCI_TENANCY_OCID,
+            "region": OCI_REGION,
+        }
 
     if not os.path.isfile(OCI_IDENTITY_USERS_FILE):
         log.error(f"Config file not found: {OCI_IDENTITY_USERS_FILE}")
