@@ -2,8 +2,9 @@
 Filename: export_domains.py
 Description: Exports users from a JSON domain file into a single Excel workbook,
              with one sheet per domain and columns: first_name, last_name, profile, groups.
+             Only real user accounts (state=present, username containing @) are exported.
 Author: Florian NOEL
-Date: 12/03/2026
+Date: 13/03/2026
 """
 
 import json
@@ -36,8 +37,8 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-INPUT_FILE = os.getenv("INPUT_FILE", "oci_identity_users.json")
-EXCEL_OUTPUT_FILE = os.getenv("EXCEL_OUTPUT_FILE", "exports/domains_export.xlsx")
+INPUT_FILE = os.getenv("INPUT_FILE", "domains.json")
+OUTPUT_FILE = os.getenv("OUTPUT_FILE", "exports/domains_export.xlsx")
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -92,13 +93,42 @@ def apply_header_style(sheet) -> None:
         cell.alignment = HEADER_ALIGNMENT
 
 
+def filter_exportable_users(users: list[dict], domain_name: str) -> list[dict]:
+    """
+    Retain only real, active user accounts from a domain's user list.
+
+    Two conditions must both be met for a user to be exported:
+    - state == "present": excludes deprovisioned or pending accounts.
+    - "@" in username: excludes service accounts, which never carry an email-style username.
+
+    :param users: Raw list of user dictionaries for a domain.
+    :param domain_name: Domain name, used only for log context.
+    :return: Filtered list of exportable user dictionaries.
+    """
+    exportable = [
+        u for u in users
+        if u.get("state") == "present" and "@" in u.get("username", "")
+    ]
+
+    skipped = len(users) - len(exportable)
+    if skipped:
+        logger.info(
+            "Domain '%s': %d user(s) skipped (state != present or no @ in username)",
+            domain_name,
+            skipped,
+        )
+
+    return exportable
+
+
 def write_domain_sheet(workbook: Workbook, domain_name: str, users: list[dict]) -> None:
     """
     Create and populate a worksheet for a single domain inside the workbook.
 
-    Only users with state="present" are written. Each row contains first_name,
-    last_name, profile (may be empty), and groups (comma-separated).
-    The sheet is named after the domain, truncated to Excel's 31-character limit.
+    Users are pre-filtered by filter_exportable_users before being written.
+    Each row contains first_name, last_name, profile (may be empty), and groups
+    (comma-separated). The sheet is named after the domain, truncated to Excel's
+    31-character limit.
 
     :param workbook: The openpyxl Workbook to add the sheet to.
     :param domain_name: Name of the domain, used as the sheet title.
@@ -110,13 +140,9 @@ def write_domain_sheet(workbook: Workbook, domain_name: str, users: list[dict]) 
     sheet.append(SHEET_FIELDNAMES)
     apply_header_style(sheet)
 
-    present_users = [u for u in users if u.get("state") == "present"]
-    skipped = len(users) - len(present_users)
+    exportable_users = filter_exportable_users(users, domain_name)
 
-    if skipped:
-        logger.info("Domain '%s': %d user(s) skipped (state != present)", domain_name, skipped)
-
-    for user in present_users:
+    for user in exportable_users:
         groups = user.get("groups", [])
         row = [
             user.get("first_name", ""),
@@ -134,7 +160,7 @@ def write_domain_sheet(workbook: Workbook, domain_name: str, users: list[dict]) 
         sheet.column_dimensions[column[0].column_letter].width = COLUMN_WIDTH
 
     logger.info(
-        "Sheet created for domain '%s' with %d user(s)", domain_name, len(present_users)
+        "Sheet created for domain '%s' with %d user(s)", domain_name, len(exportable_users)
     )
 
 
@@ -178,11 +204,11 @@ def main() -> None:
     """
     Path("logs").mkdir(exist_ok=True)
     logger.info(
-        "Starting domain export — input: %s, output: %s", INPUT_FILE, EXCEL_OUTPUT_FILE
+        "Starting domain export — input: %s, output: %s", INPUT_FILE, OUTPUT_FILE
     )
 
     data = load_json(INPUT_FILE)
-    export_all_domains(data, Path(EXCEL_OUTPUT_FILE))
+    export_all_domains(data, Path(OUTPUT_FILE))
 
     logger.info("Export complete.")
 
