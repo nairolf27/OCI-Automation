@@ -4,19 +4,23 @@ import logging
 import sys
 from datetime import datetime
 from typing import Dict, List, Optional, Set
-import os as _os
+import os as os
 import time
-
+from dotenv import load_dotenv
 
 
 
 # ─────────────────────────────────────────────
 #  CONFIGURATION
 # ─────────────────────────────────────────────
-OCI_IDENTITY_USERS_FILE = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "oci_identity_users.json")
-REQUIRE_VALIDATION      = True
-VALIDATION_KEYWORD      = "OK"
-LOG_FILE                = f"oci_reconcile_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+load_dotenv()
+
+OCI_IDENTITY_USERS_FILE = os.getenv("OCI_IDENTITY_USERS_FILE","oci_identity_users.json")
+REQUIRE_VALIDATION      = os.getenv("REQUIRE_VALIDATION", "True").lower() in ("true", "1", "yes")
+VALIDATION_KEYWORD      = os.getenv("VALIDATION_KEYWORD", "OK")
+LOG_DIR                 = os.getenv("LOG_DIR", "logs/")
+LOG_FILENAME            = os.getenv("LOG_FILENAME", "oci_reconcile")
+LOG_FILE                = f"{LOG_DIR}{LOG_FILENAME}-{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
 # ─────────────────────────────────────────────
 #  LOGGING SETUP
@@ -423,7 +427,7 @@ def main() -> None:
 
     oci_config = oci.config.from_file()
 
-    if not _os.path.isfile(OCI_IDENTITY_USERS_FILE):
+    if not os.path.isfile(OCI_IDENTITY_USERS_FILE):
         log.error(f"Config file not found: {OCI_IDENTITY_USERS_FILE}")
         sys.exit(1)
 
