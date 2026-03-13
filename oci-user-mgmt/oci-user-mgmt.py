@@ -21,7 +21,8 @@ VALIDATION_KEYWORD      = os.getenv("VALIDATION_KEYWORD", "OK")
 LOG_DIR                 = os.getenv("LOG_DIR", "logs/")
 LOG_FILENAME            = os.getenv("LOG_FILENAME", "oci_reconcile")
 LOG_FILE                = f"{LOG_DIR}{LOG_FILENAME}-{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-ENV_OCI_CONFIG          = os.getenv("ENV_OCI_CONFIG").lower() in ("true", "1", "yes")
+OCI_API_DELAY           = float(os.getenv("OCI_API_DELAY", "0.2"))
+ENV_OCI_CONFIG          = os.getenv("ENV_OCI_CONFIG", "false").lower() in ("true", "1", "yes")
 OCI_TENANCY_OCID        = os.getenv("OCI_TENANCY_OCID")
 OCI_USER_OCID           = os.getenv("OCI_USER_OCID")
 OCI_FINGERPRINT         = os.getenv("OCI_FINGERPRINT")
@@ -295,6 +296,7 @@ def create_user(client: oci.identity_domains.IdentityDomainsClient,
             ],
         )
         response = client.create_user(user=user_data)
+        time.sleep(OCI_API_DELAY)
         new_id = response.data.id
         log.info(f"  [OK]  [{domain_name}] User created: {username} (id={new_id})")
         return new_id
@@ -310,6 +312,7 @@ def delete_user(client: oci.identity_domains.IdentityDomainsClient,
         return False
     try:
         client.delete_user(user_id=user_id, force_delete=True)
+        time.sleep(OCI_API_DELAY)
         log.info(f"  [OK]  [{domain_name}] User deleted: {username}")
         return True
     except Exception as e:
@@ -337,8 +340,8 @@ def add_user_to_group(client: oci.identity_domains.IdentityDomainsClient,
             ],
         )
         client.patch_group(group_id=group_id, patch_op=patch_op)
+        time.sleep(OCI_API_DELAY)
         log.info(f"  [OK]  [{domain_name}] User '{username}' added to group '{group_name}'")
-        time.wait(0.2)
         return True
     except Exception as e:
         log.error(f"  [ERROR] [{domain_name}] Failed to add '{username}' to group '{group_name}': {e}")
@@ -363,8 +366,8 @@ def remove_user_from_group(client: oci.identity_domains.IdentityDomainsClient,
             ],
         )
         client.patch_group(group_id=group_id, patch_op=patch_op)
+        time.sleep(OCI_API_DELAY)
         log.info(f"  [OK]  [{domain_name}] User '{username}' removed from group '{group_name}'")
-        time.wait(0.2)
         return True
     except Exception as e:
         log.error(f"  [ERROR] [{domain_name}] Failed to remove '{username}' from group '{group_name}': {e}")
@@ -433,6 +436,7 @@ def main() -> None:
     if not ENV_OCI_CONFIG:
         oci_config = oci.config.from_file()
     else:
+        OCI_PRIVATE_KEY = OCI_PRIVATE_KEY.replace("\\n", "\n")
         oci_config = {
             "user": OCI_USER_OCID,
             "key_content": OCI_PRIVATE_KEY,
