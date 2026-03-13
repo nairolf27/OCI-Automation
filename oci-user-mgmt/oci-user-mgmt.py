@@ -21,6 +21,12 @@ VALIDATION_KEYWORD      = os.getenv("VALIDATION_KEYWORD", "OK")
 LOG_DIR                 = os.getenv("LOG_DIR", "logs/")
 LOG_FILENAME            = os.getenv("LOG_FILENAME", "oci_reconcile")
 LOG_FILE                = f"{LOG_DIR}{LOG_FILENAME}-{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+ENV_OCI_CONFIG          = os.getenv("ENV_OCI_CONFIG").lower() in ("true", "1", "yes")
+OCI_TENANCY_OCID        = os.getenv("OCI_TENANCY_OCID")
+OCI_USER_OCID           = os.getenv("OCI_USER_OCID")
+OCI_FINGERPRINT         = os.getenv("OCI_FINGERPRINT")
+OCI_REGION              = os.getenv("OCI_REGION")
+OCI_PRIVATE_KEY         = os.getenv("OCI_PRIVATE_KEY")
 
 # ─────────────────────────────────────────────
 #  LOGGING SETUP
