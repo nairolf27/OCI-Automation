@@ -8,7 +8,7 @@ import socks
 from pathlib import PurePosixPath
 
 # ============= CONFIGURATION =============
-SFTP_HOST = "fs-nonprod-oic-dev5-frxl36kqymbc-fr.integration.eu-frankfurt-1.ocp.oraclecloud.com"
+SFTP_HOST = ""
 SFTP_PORT = 10104
 SFTP_USER = "fnoel@sqorus.com"
 SFTP_PASSWORD = None  # Or None if using an SSH key
