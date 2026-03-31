@@ -6,13 +6,13 @@ import json
 import threading
 import socks
 # ============= CONFIGURATION =============
-SFTP_HOST = "xxx"
+SFTP_HOST = "130.61.131.105"
 SFTP_PORT = 22
-SFTP_USER = "ubuntu"
+SFTP_USER = "xxx"
 SFTP_PASSWORD = None  # Ou None si vous utilisez une clé SSH
-SFTP_KEY_PATH = r"C:\Users\fnoel\.ssh\id_ed25519_main"  
-SFTP_KEY_TYPE = "ed25519"  # "rsa"
-REMOTE_PATH = "/home/ubuntu"  # Dossier à analyser
+SFTP_KEY_PATH = r"xxx"  
+SFTP_KEY_TYPE = "rsa"  # "rsa"
+REMOTE_PATH = "xxx"  # Dossier à analyser
 # Proxy SOCKS5 (optionnel)
 USE_SOCKS5_PROXY = False
 PROXY_HOST = "xxx"
@@ -22,7 +22,7 @@ OUTPUT_PATH = "sftp_file_structure.json"
 
 # Workers
 MAX_WORKERS = 8  # Nombre de connexions SFTP parallèles (ajuster selon le serveur)
-MAX_DEPTH = 1  # Profondeur maximale à scanner (1 = racine)
+MAX_DEPTH = 99  # Profondeur maximale à scanner (1 = racine)
 # =========================================
 # Pool de connexions SFTP (une par thread)
 _thread_local = threading.local()
